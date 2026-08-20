@@ -57,7 +57,10 @@ export default function AboutPage() {
           independent RFC 3161 authorities, and signed with a pinned producer
           key. You do not have to trust this site:{" "}
           <Link href="/verify">re-run the checks in your browser</Link>, or
-          clone the journal and run the offline verifier. The{" "}
+          clone the journal and run the offline verifier. Each release
+          manifest is also timestamped in Bitcoin through OpenTimestamps, a
+          bound on when it existed that neither we nor a timestamp authority
+          can backdate. The{" "}
           <Link href="/verify">verify page</Link> also states exactly what the
           scheme does and does not prove — it is tamper evidence with producer
           identity, not multi-party governance.
