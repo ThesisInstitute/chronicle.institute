@@ -9,8 +9,21 @@ Tailwind v4; Chronicle tokens inlined in
 `PolicyEngine/chronicle` (GitHub redirects the old URL) with CLI `chronicle`
 (`ledger` kept as an alias); the v1 machine surface keeps its names — schema
 ids `ledger.*`, fact-identity hash domains, R2 buckets `ledger-raw`/`-derived`,
-and this app's `ledger/` directory + journal data paths stay put until the
-gated canonical-URL migration PR.
+and the journal data paths under `data/` stay put until the gated canonical-URL
+migration PR.
+
+## Where this lives
+
+`ThesisInstitute/chronicle.institute` — split out of
+`ThesisInstitute/thesisinstitute.org` on 2026-08-30, where the app had been the
+`ledger/` subdirectory since it was built. History came with it: every commit
+that ever touched the app is here, rewritten to this repo's root. The domain
+had already moved in the August rename; this moves the code to match, and gives
+the app the CI it never had as a subdirectory.
+
+Production is `chronicle.institute`, built by the Vercel project `chronicle`
+from `main`. `ledger.thesisinstitute.org` and `www.chronicle.institute` redirect
+there. Deploys are git-integrated: push to `main` and Vercel builds it.
 
 **Unlisted until the public launch decision**: every response carries
 `X-Robots-Tag: noindex, nofollow`, `metadata.robots` is noindex, and
