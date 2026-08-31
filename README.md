@@ -75,6 +75,12 @@ from the control in the header — system, light, dark. Every colour token in
 the two registers cannot drift, because there is one place to edit a colour;
 and with no choice stored the page is system-aware with no JavaScript at all.
 
+The floor is `light-dark()` — Chrome 123 / Firefox 120 / Safari 17.5, Baseline
+since mid-2024. Below it the palette drops to UA defaults entirely: readable,
+because `color-scheme` still keeps canvas and text coherent, but unstyled. That
+is a deliberate trade against keeping a second hard-coded palette, which is the
+drift the single definition exists to prevent.
+
 The choice lives in this browser's `localStorage` (`chronicle:register`) and is
 applied by a small script in `<head>` before first paint, so a chosen register
 never flashes the other one. Nothing about it reaches the server, and no page of

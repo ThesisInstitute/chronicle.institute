@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { IconDeviceDesktop, IconMoon, IconSun } from "@tabler/icons-react";
 import {
-  faviconHref,
+  applyRegister,
   normalizeChoice,
   THEME_STORAGE_KEY,
-  themeAttribute,
   type ThemeChoice,
 } from "@/lib/theme";
 
@@ -26,15 +25,6 @@ const OPTIONS: {
   { value: "dark", label: "Dark register", title: "Dark", Icon: IconMoon },
 ];
 
-function applyChoice(choice: ThemeChoice) {
-  const root = document.documentElement;
-  const attr = themeAttribute(choice);
-  if (attr) root.setAttribute("data-theme", attr);
-  else root.removeAttribute("data-theme");
-  const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-  if (icon) icon.href = faviconHref(choice);
-}
-
 export function ThemeControl() {
   // The server cannot know the reader's choice, so the first paint of the
   // control is unmarked; the head script has already inked the page itself.
@@ -47,16 +37,23 @@ export function ThemeControl() {
     } catch {
       /* storage denied — follow the system */
     }
-    setChoice(normalizeChoice(stored));
+    const next = normalizeChoice(stored);
+    setChoice(next);
+    // Not redundant with the head script: that one sets only the attribute, so
+    // on a cold load the icon is still the system-following favicon.svg. A
+    // reader whose choice opposes their system would see the wrong tab icon
+    // until they touched the control.
+    applyRegister(document, next);
   }, []);
 
   // Another tab of the record is the same reader; keep the two in step.
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
-      if (event.key !== THEME_STORAGE_KEY) return;
-      const next = normalizeChoice(event.newValue);
+      // key === null is a storage clear: everything went, this key included.
+      if (event.key !== null && event.key !== THEME_STORAGE_KEY) return;
+      const next = normalizeChoice(event.key === null ? null : event.newValue);
       setChoice(next);
-      applyChoice(next);
+      applyRegister(document, next);
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
@@ -64,7 +61,7 @@ export function ThemeControl() {
 
   const choose = (next: ThemeChoice) => {
     setChoice(next);
-    applyChoice(next);
+    applyRegister(document, next);
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {

@@ -49,6 +49,33 @@ export function faviconHref(choice: ThemeChoice): string {
   return attr ? `/favicon-${attr}.svg` : "/favicon.svg";
 }
 
+/** The parts of the DOM this needs, so the logic can be tested without one. */
+export interface RegisterTarget {
+  documentElement: {
+    setAttribute(n: string, v: string): void;
+    removeAttribute(n: string): void;
+  };
+  querySelector(selectors: string): { href: string } | null;
+}
+
+/**
+ * Put a choice on the page: the attribute the CSS keys off, and the icon that
+ * matches it. Idempotent, so it is safe to call on mount as well as on change —
+ * and it must be called on mount, because the pre-paint script sets only the
+ * attribute. Without it a reader whose stored choice opposes their system keeps
+ * the system-following /favicon.svg in the tab on every cold load.
+ */
+export function applyRegister(
+  target: RegisterTarget,
+  choice: ThemeChoice,
+): void {
+  const attr = themeAttribute(choice);
+  if (attr) target.documentElement.setAttribute("data-theme", attr);
+  else target.documentElement.removeAttribute("data-theme");
+  const icon = target.querySelector('link[rel="icon"]');
+  if (icon) icon.href = faviconHref(choice);
+}
+
 /**
  * Runs in <head>, before first paint, so a reader who chose a register never
  * sees the other one flash. Deliberately tiny and total: a blocked or full

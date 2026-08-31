@@ -12,7 +12,15 @@
    worth keeping: the two registers cannot drift out of step, because there is
    only one place to edit; and an explicit choice needs no second palette, so
    the choice can be applied by one attribute before first paint. Scrollbars,
-   form controls and the canvas behind the page follow color-scheme too. */
+   form controls and the canvas behind the page follow color-scheme too.
+
+   The floor is light-dark(): Chrome 123, Firefox 120, Safari 17.5 — Baseline
+   since mid-2024. Below it the failure is total, not graceful: every property
+   substituting one of these tokens is invalid at computed-value time and the
+   palette drops to UA defaults. The page stays readable (color-scheme still
+   keeps canvas and text coherent) but is unstyled. Accepted deliberately
+   rather than kept as a second hard-coded palette, which is the drift this
+   file exists to prevent. */
 
 @theme {
   /* Core palette — Chronicle surfaces */
