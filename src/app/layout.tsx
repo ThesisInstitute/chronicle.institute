@@ -4,6 +4,8 @@ import "./globals.css";
 import { getPins } from "@/lib/data";
 import { truncateHash } from "@/lib/format";
 import { Wordmark } from "@/components/Wordmark";
+import { ThemeControl } from "@/components/ThemeControl";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://chronicle.institute"),
@@ -37,8 +39,10 @@ export default function RootLayout({
 }) {
   const pins = getPins();
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Applies a chosen register before first paint; see src/lib/theme.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
@@ -81,6 +85,9 @@ export default function RootLayout({
                 </Link>
               ))}
             </nav>
+            <div className="ml-auto">
+              <ThemeControl />
+            </div>
           </div>
         </header>
         <main id="main" className="mx-auto max-w-6xl px-4 py-10 sm:px-6">

@@ -2,43 +2,51 @@
 
 /* Chronicle reads as a register, not a dashboard: paper surfaces, hairline
    rules, mono record identifiers, and one iron-gall blue used sparingly.
-   Light-native with a dark register via prefers-color-scheme; the palette is
-   the Chronicle token set (constellation-design/tokens/chronicle.css), carried
-   here under the variable names the components were built on. */
+   Light-native with a dark register; the palette is the Chronicle token set
+   (constellation-design/tokens/chronicle.css), carried here under the variable
+   names the components were built on.
+
+   Every token is written once, as light-dark(light, dark). Which half is used
+   is decided by the element's color-scheme, set on :root below: the reader's
+   system preference by default, or the register they chose. Two consequences
+   worth keeping: the two registers cannot drift out of step, because there is
+   only one place to edit; and an explicit choice needs no second palette, so
+   the choice can be applied by one attribute before first paint. Scrollbars,
+   form controls and the canvas behind the page follow color-scheme too. */
 
 @theme {
-  /* Core light palette — Chronicle surfaces */
-  --color-canvas: #FAFBFD;
-  --color-paper: #FDFEFF;
-  --color-section: #EEF2F8;
-  --color-card: #FFFFFF;
+  /* Core palette — Chronicle surfaces */
+  --color-canvas: light-dark(#FAFBFD, #0C1220);
+  --color-paper: light-dark(#FDFEFF, #101828);
+  --color-section: light-dark(#EEF2F8, #172134);
+  --color-card: light-dark(#FFFFFF, #101828);
 
-  --color-border-soft: #D3DCE8;
-  --color-border-strong: #AFBFD4;
+  --color-border-soft: light-dark(#D3DCE8, #243044);
+  --color-border-strong: light-dark(#AFBFD4, #36455E);
 
-  --color-text-primary: #131B26;
-  --color-text-secondary: #3F4F63;
-  --color-text-tertiary: #6B7A8D;
-  --color-text-disabled: #94A2B4;
+  --color-text-primary: light-dark(#131B26, #E7EDF5);
+  --color-text-secondary: light-dark(#3F4F63, #A2B1C6);
+  --color-text-tertiary: light-dark(#6B7A8D, #71809A);
+  --color-text-disabled: light-dark(#94A2B4, #566880);
 
   /* Cool neutral tints (hover washes, quiet chips) */
-  --color-mist-100: #EDF1F7;
-  --color-mist-200: #DEE5EF;
-  --color-mist-400: #A9B8CC;
-  --color-mist-600: #5C6F87;
+  --color-mist-100: light-dark(#EDF1F7, #1A2436);
+  --color-mist-200: light-dark(#DEE5EF, #223049);
+  --color-mist-400: light-dark(#A9B8CC, #3D5270);
+  --color-mist-600: light-dark(#5C6F87, #93A7C0);
 
   /* Iron-gall blues — the one hue */
-  --color-horizon-50: #F2F6FB;
-  --color-horizon-100: #E7EDF5;
-  --color-horizon-300: #A9C0DE;
-  --color-horizon-500: #587FAF;
-  --color-horizon-600: #3E618F;
-  --color-horizon-700: #33547D;
+  --color-horizon-50: light-dark(#F2F6FB, #101A2C);
+  --color-horizon-100: light-dark(#E7EDF5, #162033);
+  --color-horizon-300: light-dark(#A9C0DE, #3E5E8C);
+  --color-horizon-500: light-dark(#587FAF, #587FAF);
+  --color-horizon-600: light-dark(#3E618F, #6E96CC);
+  --color-horizon-700: light-dark(#33547D, #7CA1D6);
 
   /* Semantic */
-  --color-accent: #33547D;
-  --color-accent-hover: #24405F;
-  --color-accent-subtle: #E7EDF5;
+  --color-accent: light-dark(#33547D, #7CA1D6);
+  --color-accent-hover: light-dark(#24405F, #9BB8E2);
+  --color-accent-subtle: light-dark(#E7EDF5, #162033);
 
   /* Fonts */
   --font-display: "Jost", "Century Gothic", "Avenir Next", Futura, sans-serif;
@@ -46,39 +54,19 @@
   --font-mono: "IBM Plex Mono", monospace;
 }
 
-/* Dark register: same variables, re-inked. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --color-canvas: #0C1220;
-    --color-paper: #101828;
-    --color-section: #172134;
-    --color-card: #101828;
+/* The register: the reader's system preference unless they said otherwise.
+   data-theme is written by the head script in layout.tsx before first paint
+   (from localStorage) and by ThemeControl on change; absent means system. */
+:root {
+  color-scheme: light dark;
+}
 
-    --color-border-soft: #243044;
-    --color-border-strong: #36455E;
+:root[data-theme="light"] {
+  color-scheme: light;
+}
 
-    --color-text-primary: #E7EDF5;
-    --color-text-secondary: #A2B1C6;
-    --color-text-tertiary: #71809A;
-    --color-text-disabled: #566880;
-
-    --color-mist-100: #1A2436;
-    --color-mist-200: #223049;
-    --color-mist-400: #3D5270;
-    --color-mist-600: #93A7C0;
-
-    --color-horizon-50: #101A2C;
-    --color-horizon-100: #162033;
-    --color-horizon-300: #3E5E8C;
-    --color-horizon-500: #587FAF;
-    --color-horizon-600: #6E96CC;
-    --color-horizon-700: #7CA1D6;
-
-    --color-accent: #7CA1D6;
-    --color-accent-hover: #9BB8E2;
-    --color-accent-subtle: #162033;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @layer base {
