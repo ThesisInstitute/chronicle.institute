@@ -22,8 +22,10 @@ had already moved in the August rename; this moves the code to match, and gives
 the app the CI it never had as a subdirectory.
 
 Production is `chronicle.institute`, built by the Vercel project `chronicle`
-from `main`. `ledger.thesisinstitute.org` and `www.chronicle.institute` redirect
-there. Deploys are git-integrated: push to `main` and Vercel builds it.
+from `main` — repointed from the site repo on 2026-08-30, when this repo became
+the source of the deployment as well as of the code.
+`ledger.thesisinstitute.org` and `www.chronicle.institute` redirect there.
+Deploys are git-integrated: push to `main` and Vercel builds it.
 
 **Unlisted until the public launch decision**: every response carries
 `X-Robots-Tag: noindex, nofollow`, `metadata.robots` is noindex, and
