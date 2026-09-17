@@ -110,3 +110,7 @@ bun run build
 - Values render exactly as recorded — duplicate captures (including
   unit-inconsistent ones) are shown side by side on `/revisions`.
 - No mock data anywhere; every number traces to the pinned snapshot.
+
+## License
+
+Code in this repository is released under the [MIT License](LICENSE). Original text and figures are released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) with attribution to Thesis Institute. Third-party data and materials keep their own terms.
