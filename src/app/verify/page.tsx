@@ -96,13 +96,14 @@ export default function VerifyPage() {
         <p className="mt-2 max-w-3xl text-sm text-text-secondary">
           The complete check — including the RFC 3161 signature chains to the
           committed trust anchors, which browsers cannot do here — runs
-          offline from a clone of the journal branch:
+          offline from a clone of the journal branch, in the Python
+          environment the branch’s lockfile pins:
         </p>
         <pre className="mt-3 overflow-x-auto border border-border-soft bg-paper p-4 text-sm">
           {`git clone --branch ${pins.journal.branch} \\
     https://github.com/${pins.journal.repo}.git
 cd ledger
-python3 scripts/verify_release_chain.py --full`}
+uv run python scripts/verify_release_chain.py --full`}
         </pre>
         <p className="mt-3 max-w-3xl text-sm text-text-secondary">
           Internal verification proves a clone is self-consistent; it cannot,
