@@ -5,6 +5,7 @@ import * as ed from "@noble/ed25519";
 import { verifyChain } from "@/lib/verify/chain";
 import {
   FETCH_TIMEOUT_MS,
+  FetchNetworkError,
   FetchStatusError,
   FetchTimeoutError,
   fetchBytes,
@@ -109,6 +110,18 @@ describe("fetchBytes", () => {
     expect(err.message).toBe("/x: HTTP 500");
   });
 
+  it("names the file when the request fails outright", async () => {
+    const fetchImpl: FetchLike = () =>
+      Promise.reject(new TypeError("Failed to fetch"));
+    const err = await fetchBytes("/api/raw/journal.jsonl", {
+      fetchImpl,
+      timeoutMs: T,
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(FetchNetworkError);
+    expect(err.message).toBe("/api/raw/journal.jsonl: Failed to fetch");
+    expect(err.cause).toBeInstanceOf(TypeError);
+  });
+
   it("ends a request whose headers never arrive, and aborts it", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { fetchImpl, signals } = scripted({ headerMs: NEVER });
@@ -207,6 +220,13 @@ describe("fetchJson", () => {
       fetchJson("/api/releases", { ...scripted({ body: json }), timeoutMs: T }),
     ).resolves.toEqual({ stems: ["a"] });
 
+    const garbled = await fetchJson<{ stems: string[] }>("/api/releases", {
+      ...scripted({ body: new TextEncoder().encode("<html>") }),
+      timeoutMs: T,
+    }).catch((e) => e);
+    expect(garbled).toBeInstanceOf(FetchNetworkError);
+    expect(garbled.message).toMatch(/^\/api\/releases: /);
+
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const seen = observe(
       fetchJson("/api/releases", {
@@ -230,6 +250,14 @@ describe("fetchOptionalBytes", () => {
     await expect(
       fetchOptionalBytes("/x", { ...scripted({ status: 500 }), timeoutMs: T }),
     ).rejects.toBeInstanceOf(FetchStatusError);
+  });
+
+  it("propagates a network failure rather than reporting the file absent", async () => {
+    const fetchImpl: FetchLike = () =>
+      Promise.reject(new TypeError("Load failed"));
+    await expect(
+      fetchOptionalBytes("/x", { fetchImpl, timeoutMs: T }),
+    ).rejects.toBeInstanceOf(FetchNetworkError);
   });
 
   it("propagates a timeout rather than reporting the file absent", async () => {

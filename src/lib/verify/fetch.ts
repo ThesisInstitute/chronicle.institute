@@ -28,6 +28,22 @@ export class FetchStatusError extends Error {
   }
 }
 
+/**
+ * The request failed outright (network, unparseable body). The browser's own
+ * message does not say which file; this prefixes the path that failed.
+ */
+export class FetchNetworkError extends Error {
+  constructor(
+    readonly path: string,
+    cause: unknown,
+  ) {
+    super(`${path}: ${cause instanceof Error ? cause.message : String(cause)}`, {
+      cause,
+    });
+    this.name = "FetchNetworkError";
+  }
+}
+
 export type FetchLike = (
   input: string,
   init: { signal: AbortSignal },
@@ -67,7 +83,10 @@ export async function fetchWithTimeout<T>(
     const res = await fetchImpl(path, { signal: controller.signal });
     if (!res.ok) throw new FetchStatusError(path, res.status);
     return read(res);
-  })();
+  })().catch((e: unknown) => {
+    if (e instanceof FetchStatusError) throw e;
+    throw new FetchNetworkError(path, e);
+  });
   try {
     return await Promise.race([exchange, deadline]);
   } finally {
