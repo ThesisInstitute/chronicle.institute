@@ -112,6 +112,48 @@ python3 scripts/verify_release_chain.py --full`}
           deployment pins {pins.journal.repo}@{pins.journal.commit.slice(0, 12)}.
         </p>
       </section>
+
+      <section aria-labelledby="bitcoin-heading" className="mt-10">
+        <h2 id="bitcoin-heading" className="text-xl">
+          Bitcoin-anchored checkpoints
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-text-secondary">
+          Each release manifest is also timestamped in Bitcoin through
+          OpenTimestamps, over the same exact bytes both RFC 3161 authorities
+          witness. Once its proof carries a Bitcoin block attestation, the
+          manifest — and with it the journal state and the chain it commits
+          to — existed no later than that block, and neither we nor a
+          timestamp authority can move that bound earlier. A job runs daily:
+          it stamps any manifest that has no proof yet and upgrades pending
+          proofs until the attestation is written into the file. The proofs
+          are committed as <code>ots/&lt;stem&gt;.json.ots</code> on the
+          repository’s <code>main</code> branch, not the journal
+          branch. From the clone above, for any release:
+        </p>
+        <pre className="mt-3 overflow-x-auto border border-border-soft bg-paper p-4 text-sm">
+          {`git show origin/main:ots/<stem>.json.ots > ../<stem>.json.ots
+uvx --from opentimestamps-client==0.7.2 ots --no-bitcoin \\
+    verify -f releases/manifests/<stem>.json ../<stem>.json.ots`}
+        </pre>
+        <p className="mt-3 max-w-3xl text-sm text-text-secondary">
+          That is the OpenTimestamps client at the version the job pins. It
+          first checks that the proof commits to the manifest’s exact
+          bytes. With <code>--no-bitcoin</code> it then prints each attested
+          block’s height and merkle root, to compare against any block
+          source you trust; without the flag it looks each block up on your
+          own Bitcoin node. The{" "}
+          <a href={`https://github.com/${pins.journal.repo}/tree/main/ots`}>
+            proofs’ README
+          </a>{" "}
+          documents a sweep over every release at once. Anchoring began in
+          August 2026 — the earliest attestation is in block 963,242, mined
+          on 2026-08-20 UTC — so for releases created before then the RFC
+          3161 receipt times remain the earlier witnesses. This adds
+          anteriority that cannot be backdated, not uniqueness: it cannot
+          rule out a parallel fork, and a rewritten history would carry its
+          own, later, Bitcoin times.
+        </p>
+      </section>
     </div>
   );
 }
