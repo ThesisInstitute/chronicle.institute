@@ -9,13 +9,8 @@ import {
 } from "@tabler/icons-react";
 import type { Check, ChainVerification } from "@/lib/verify/chain";
 import { verifyChain } from "@/lib/verify/chain";
+import { fetchVerifierInputs } from "@/lib/verify/fetch";
 import { formatUtc } from "@/lib/format";
-
-async function fetchBytes(path: string): Promise<Uint8Array> {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
 
 function CheckRow({ check }: { check: Check }) {
   const icon =
@@ -63,60 +58,44 @@ export function VerifierClient() {
   const run = useCallback(async () => {
     try {
       setState({ phase: "running", step: "Fetching committed bytes" });
-      const releaseList = (await (await fetch("/api/releases")).json()) as {
-        stems: string[];
-      };
-      const journalBytes = await fetchBytes("/api/raw/journal.jsonl");
-      const prefixBytes = await fetchBytes("/api/raw/immutable_prefix.json");
-      const pubkeyPem = new TextDecoder().decode(
-        await fetchBytes("/api/raw/anchors/producer-ed25519.pub"),
-      );
-      const manifestFiles = await Promise.all(
-        releaseList.stems.map(async (stem) => {
-          const [json, freetsa, digicert, producerSig] = await Promise.all([
-            fetchBytes(`/api/raw/releases/${stem}.json`),
-            fetchBytes(`/api/raw/releases/${stem}.freetsa.tsr`).catch(() => null),
-            fetchBytes(`/api/raw/releases/${stem}.digicert.tsr`).catch(() => null),
-            fetchBytes(`/api/raw/releases/${stem}.producer.sig`).catch(() => null),
-          ]);
-          return { stem, json, freetsa, digicert, producerSig };
-        }),
-      );
+      const inputs = await fetchVerifierInputs();
       setState({ phase: "running", step: "Recomputing hashes and signatures" });
       const ed = await import("@noble/ed25519");
       const result = await verifyChain({
-        manifestFiles,
-        journalBytes,
-        prefixBytes,
-        producerPubkeyPem: pubkeyPem,
+        ...inputs,
         verifyEd25519: (sig, msg, pub) => ed.verifyAsync(sig, msg, pub),
       });
       setState({ phase: "done", result });
     } catch (e) {
-      setState({ phase: "error", message: String(e) });
+      setState({
+        phase: "error",
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }, []);
 
   return (
     <div className="mt-3">
-      {state.phase === "idle" ? (
+      {state.phase === "error" ? (
+        <p className="alert-slot mb-3 p-3 text-sm" role="alert">
+          Verification could not run: {state.message}
+        </p>
+      ) : null}
+      {state.phase === "idle" || state.phase === "error" ? (
         <button
           type="button"
           onClick={run}
           className="inline-flex items-center gap-2 border border-border-strong bg-paper px-4 py-2 text-sm font-medium hover:border-accent hover:text-accent"
         >
           <IconPlayerPlay size={16} aria-hidden />
-          Run the checks in this browser
+          {state.phase === "error"
+            ? "Run the checks again"
+            : "Run the checks in this browser"}
         </button>
       ) : null}
       {state.phase === "running" ? (
         <p className="text-sm text-text-secondary" role="status">
           {state.step}…
-        </p>
-      ) : null}
-      {state.phase === "error" ? (
-        <p className="alert-slot p-3 text-sm" role="alert">
-          Verification could not run: {state.message}
         </p>
       ) : null}
       {state.phase === "done" ? <Results result={state.result} /> : null}
