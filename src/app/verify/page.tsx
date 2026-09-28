@@ -113,6 +113,54 @@ uv run python scripts/verify_release_chain.py --full`}
           deployment pins {pins.journal.repo}@{pins.journal.commit.slice(0, 12)}.
         </p>
       </section>
+
+      <section aria-labelledby="bitcoin-heading" className="mt-10">
+        <h2 id="bitcoin-heading" className="text-xl">
+          Bitcoin-anchored checkpoints
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm text-text-secondary">
+          Each release manifest is also timestamped in Bitcoin through
+          OpenTimestamps, over the same exact bytes both RFC 3161 receipts
+          timestamp. A proof whose attestation checks out against the block
+          it names — its merkle root matches that block in the Bitcoin chain
+          — shows that the manifest, and with it the journal state and the
+          chain it commits to, existed no later than that block; bytes made
+          after a block was mined cannot get a proof into it. A job is
+          scheduled daily: it stamps any manifest that has no proof yet and
+          tries to upgrade pending proofs, so a new release’s proof stays
+          pending until its attestation is folded in. The proofs are
+          committed as <code>ots/&lt;stem&gt;.json.ots</code> on the
+          repository’s <code>main</code> branch, not the journal branch, and
+          the browser checks above do not check them. From the clone above,
+          for any release (this deployment serves{" "}
+          <code>{releases.map((r) => r.stem).join(", ")}</code>):
+        </p>
+        <pre className="mt-3 overflow-x-auto border border-border-soft bg-paper p-4 text-sm">
+          {`git show origin/main:ots/<stem>.json.ots > ../<stem>.json.ots
+uvx --from opentimestamps-client==0.7.2 ots --no-bitcoin \\
+    verify -f releases/manifests/<stem>.json ../<stem>.json.ots`}
+        </pre>
+        <p className="mt-3 max-w-3xl text-sm text-text-secondary">
+          That is the OpenTimestamps client at the version the job pins. It
+          first checks that the proof commits to the manifest’s exact bytes.
+          With <code>--no-bitcoin</code> it then prints each attested
+          block’s height and merkle root for you to compare against a block
+          source you trust, and exits with status 1 because it has not
+          checked Bitcoin itself; with a Bitcoin node configured for it,
+          drop the flag and it checks an attestation against that node. The{" "}
+          <a href="https://github.com/PolicyEngine/chronicle/tree/main/ots">
+            proofs’ README
+          </a>{" "}
+          documents a sweep over every release’s binding and attestation
+          status, which does not check blocks either. The earliest
+          attestation in the committed proofs is in block 963,242, whose
+          header is dated 2026-08-20 UTC, so for releases created before
+          then the RFC 3161 receipt times remain the earlier witnesses. What
+          this adds is anteriority, not uniqueness: it cannot rule out a
+          different history anchored alongside this one, so keep the
+          external checkpoint described above.
+        </p>
+      </section>
     </div>
   );
 }
