@@ -1,8 +1,9 @@
-// Every request the browser verifier makes is bounded. A stalled server or a
-// dropped connection must end in a visible "could not run" error — never a
-// spinner that waits forever, and never a check reported as FAILED because a
-// file did not arrive in time. The deadline covers the whole exchange (headers
-// and body) and aborts the underlying request when it passes.
+// Every request the browser verifier makes is bounded, and so is every search
+// request (src/lib/search-request.ts). A stalled server or a dropped
+// connection must end in a visible error — never a spinner that waits
+// forever, and never a check reported as FAILED because a file did not arrive
+// in time. The deadline covers the whole exchange (headers and body) and
+// aborts the underlying request when it passes.
 
 import type { ChainInputs } from "./chain";
 
@@ -52,32 +53,52 @@ export type FetchLike = (
 export interface FetchOptions {
   timeoutMs?: number;
   fetchImpl?: FetchLike;
+  /**
+   * The caller's own cancellation. When it aborts, the call rejects at once
+   * with the signal's reason, as `fetch` does, and the request is aborted.
+   */
+  signal?: AbortSignal;
 }
 
 const globalFetch: FetchLike = (input, init) => fetch(input, init);
 
 /**
- * Fetch `path` and read its body with `read`, settling within `timeoutMs`.
+ * Fetch `path` and read its body with `read`, settling within `timeoutMs`,
+ * or as soon as the caller's `signal` aborts if that comes first.
  *
  * The race against the deadline, not the abort alone, is what guarantees the
  * bound: an implementation that ignores the signal still cannot hold the
  * caller past the deadline. The abort is what cancels the request itself.
+ * The caller's abort is raced the same way.
  */
 export async function fetchWithTimeout<T>(
   path: string,
   read: (res: Response) => Promise<T>,
-  { timeoutMs = FETCH_TIMEOUT_MS, fetchImpl = globalFetch }: FetchOptions = {},
+  {
+    timeoutMs = FETCH_TIMEOUT_MS,
+    fetchImpl = globalFetch,
+    signal,
+  }: FetchOptions = {},
 ): Promise<T> {
+  if (signal?.aborted) throw signal.reason;
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<never>((_, reject) => {
+  let onAbort: (() => void) | undefined;
+  // Each way of ending early settles the call before aborting the request, so
+  // the abort's own rejection can never be what the caller sees.
+  const cutoff = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      // Settle with the timeout before aborting, so the abort's own rejection
-      // can never be what the caller sees.
       const error = new FetchTimeoutError(path, timeoutMs);
       reject(error);
       controller.abort(error);
     }, timeoutMs);
+    if (signal) {
+      onAbort = () => {
+        reject(signal.reason);
+        controller.abort(signal.reason);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
   });
   const exchange = (async () => {
     const res = await fetchImpl(path, { signal: controller.signal });
@@ -88,9 +109,10 @@ export async function fetchWithTimeout<T>(
     throw new FetchNetworkError(path, e);
   });
   try {
-    return await Promise.race([exchange, deadline]);
+    return await Promise.race([exchange, cutoff]);
   } finally {
     clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener("abort", onAbort);
   }
 }
 
