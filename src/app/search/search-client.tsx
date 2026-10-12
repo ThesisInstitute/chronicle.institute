@@ -3,15 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { IconSearch } from "@tabler/icons-react";
+import {
+  IDLE_SEARCH,
+  startSearch,
+  type SearchHit,
+  type SearchState,
+} from "@/lib/search-request";
 
-interface SearchDoc {
-  kind: "journal" | "store" | "package";
-  id: string;
-  title: string;
-  detail: string;
-}
-
-const KIND_LABEL: Record<SearchDoc["kind"], string> = {
+const KIND_LABEL: Record<SearchHit["kind"], string> = {
   journal: "journal",
   store: "store",
   package: "package",
@@ -19,44 +18,25 @@ const KIND_LABEL: Record<SearchDoc["kind"], string> = {
 
 export function SearchClient({ corpusSize }: { corpusSize: number }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchDoc[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [{ results, pending, error }, setSearch] =
+    useState<SearchState>(IDLE_SEARCH);
+  // "Search again" bumps this to re-run an unchanged query.
+  const [attempt, setAttempt] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const requestSeq = useRef(0);
+  const trimmed = query.trim();
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setResults([]);
-      setPending(false);
-      return;
-    }
-    setPending(true);
-    const seq = ++requestSeq.current;
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as { results: SearchDoc[] };
-        if (requestSeq.current === seq) {
-          setResults(data.results);
-          setError(null);
-          setPending(false);
-        }
-      } catch (e) {
-        if (requestSeq.current === seq) {
-          setError(String(e));
-          setPending(false);
-        }
-      }
-    }, 150);
-    return () => clearTimeout(t);
-  }, [query]);
+  // The cleanup aborts the request in flight, so a new query (or leaving the
+  // page) cancels the old one instead of letting it run on unseen.
+  useEffect(() => startSearch(trimmed, setSearch), [trimmed, attempt]);
+
+  function searchAgain() {
+    setAttempt((n) => n + 1);
+    inputRef.current?.focus();
+  }
 
   return (
     <div className="max-w-3xl">
@@ -73,11 +53,20 @@ export function SearchClient({ corpusSize }: { corpusSize: number }) {
         />
       </label>
       {error ? (
-        <p className="alert-text mt-4 text-sm" role="alert">
-          Search failed: {error}
-        </p>
+        <div className="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+          <p className="alert-text" role="alert">
+            Search failed: {error}
+          </p>
+          <button
+            type="button"
+            onClick={searchAgain}
+            className="text-text-secondary underline underline-offset-2 hover:text-accent"
+          >
+            Search again
+          </button>
+        </div>
       ) : null}
-      {query.trim() && !pending && !error ? (
+      {trimmed && !pending && !error ? (
         <p className="mt-3 text-sm text-text-tertiary" role="status">
           {results.length === 50
             ? "First 50 matches"

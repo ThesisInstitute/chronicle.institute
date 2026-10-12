@@ -14,80 +14,16 @@ import {
   fetchVerifierInputs,
   type FetchLike,
 } from "@/lib/verify/fetch";
+import {
+  BODY,
+  NEVER,
+  after,
+  observe,
+  scripted,
+  type Script,
+} from "./support/scripted-fetch";
 
 const T = 1_000;
-const NEVER = Number.POSITIVE_INFINITY;
-const BODY = new Uint8Array([1, 2, 3]);
-
-interface Script {
-  /** Delay before the response headers arrive (NEVER = they don't). */
-  headerMs?: number;
-  /** Further delay before the body completes (NEVER = it doesn't). */
-  bodyMs?: number;
-  status?: number;
-  body?: Uint8Array;
-  /** A real fetch rejects and errors its body when the signal aborts. */
-  honorAbort?: boolean;
-}
-
-function after(ms: number, fn: () => void) {
-  // Zero means now: the fake clock schedules a 0 ms timer created mid-tick
-  // one millisecond out, which would move a "T - 1" completion onto T.
-  if (ms === 0) fn();
-  else if (ms !== NEVER) setTimeout(fn, ms);
-}
-
-/**
- * One scripted exchange: a fetch that responds on a timetable. The response
- * is a minimal stand-in rather than a platform Response so that every delay
- * runs on the (fake) timers under test, not on the runtime's stream plumbing.
- */
-function scripted({
-  headerMs = 0,
-  bodyMs = 0,
-  status = 200,
-  body = BODY,
-  honorAbort = true,
-}: Script) {
-  const signals: AbortSignal[] = [];
-  const fetchImpl: FetchLike = (_input, { signal }) => {
-    signals.push(signal);
-    return new Promise<Response>((resolve, reject) => {
-      if (honorAbort) {
-        signal.addEventListener("abort", () => reject(signal.reason));
-      }
-      after(headerMs, () => {
-        const complete = new Promise<Uint8Array>((done, fail) => {
-          if (honorAbort) {
-            signal.addEventListener("abort", () => fail(signal.reason));
-          }
-          after(bodyMs, () => done(body));
-        });
-        complete.catch(() => {}); // a body nobody reads may still be aborted
-        resolve({
-          ok: status >= 200 && status < 300,
-          status,
-          arrayBuffer: async () => (await complete).slice().buffer,
-          json: async () =>
-            JSON.parse(new TextDecoder().decode(await complete)),
-        } as unknown as Response);
-      });
-    });
-  };
-  return { fetchImpl, signals };
-}
-
-/** Track a promise's settlement without awaiting it. */
-function observe<T>(promise: Promise<T>) {
-  const seen: { settled: boolean; value?: T; error?: unknown } = {
-    settled: false,
-  };
-  promise.then(
-    (value) => Object.assign(seen, { settled: true, value }),
-    (error) => Object.assign(seen, { settled: true, error }),
-  );
-  return seen;
-}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -206,6 +142,118 @@ describe("fetchBytes timing invariant", () => {
       if (headerMs + bodyMs < T) {
         expect(seen.error).toBeUndefined();
         expect(seen.value).toEqual(BODY);
+      } else {
+        expect(seen.error).toBeInstanceOf(FetchTimeoutError);
+      }
+    },
+  );
+});
+
+// The caller's own signal (search cancels a superseded query this way).
+describe("fetchBytes with the caller's signal", () => {
+  const REASON = new Error("superseded");
+
+  it.each([true, false])(
+    "settles at once with the caller's reason and aborts the request (honours abort: %s)",
+    async (honorAbort) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const caller = new AbortController();
+      const { fetchImpl, signals } = scripted({ headerMs: NEVER, honorAbort });
+      const seen = observe(
+        fetchBytes("/x", { fetchImpl, timeoutMs: T, signal: caller.signal }),
+      );
+      await vi.advanceTimersByTimeAsync(T / 2);
+      expect(seen.settled).toBe(false);
+
+      caller.abort(REASON);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(seen.error).toBe(REASON);
+      expect(signals[0].aborted).toBe(true);
+      // The deadline timer went with it.
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("sends nothing when the signal has already aborted", async () => {
+    const caller = new AbortController();
+    caller.abort(REASON);
+    const { fetchImpl, signals } = scripted({});
+    await expect(
+      fetchBytes("/x", { fetchImpl, timeoutMs: T, signal: caller.signal }),
+    ).rejects.toBe(REASON);
+    expect(signals).toHaveLength(0);
+  });
+
+  it("lets go of the signal once settled", async () => {
+    const caller = new AbortController();
+    const { fetchImpl, signals } = scripted({});
+    await expect(
+      fetchBytes("/x", { fetchImpl, timeoutMs: T, signal: caller.signal }),
+    ).resolves.toEqual(BODY);
+    // Were the listener still attached, this would abort the finished request.
+    caller.abort(REASON);
+    expect(signals[0].aborted).toBe(false);
+  });
+
+  it("keeps the timeout as the outcome when the caller aborts afterwards", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const caller = new AbortController();
+    const { fetchImpl } = scripted({ headerMs: NEVER });
+    const seen = observe(
+      fetchBytes("/x", { fetchImpl, timeoutMs: T, signal: caller.signal }),
+    );
+    await vi.advanceTimersByTimeAsync(T);
+    caller.abort(REASON);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen.error).toBeInstanceOf(FetchTimeoutError);
+  });
+});
+
+// Invariant, with the caller's signal: the call settles with whichever comes
+// first of the complete response (the body), the caller's abort (its reason),
+// and the deadline (FetchTimeoutError), whether or not the fetch
+// implementation honours the abort.
+describe("fetchBytes caller-abort invariant", () => {
+  const REASON = new Error("superseded");
+  const delays = [0, 1, T / 2, T - 1, T + 1, NEVER];
+  const cases = delays.flatMap((headerMs) =>
+    delays.flatMap((bodyMs) =>
+      delays.flatMap((abortMs) =>
+        [true, false].map((honorAbort) => ({
+          headerMs,
+          bodyMs,
+          abortMs,
+          honorAbort,
+        })),
+      ),
+    ),
+  );
+  // Simultaneous events are ties; the invariant is stated for the rest.
+  const decisive = cases.filter(({ headerMs, bodyMs, abortMs }) => {
+    const done = headerMs + bodyMs;
+    const finite = [done, abortMs, T].filter(Number.isFinite);
+    return new Set(finite).size === finite.length;
+  });
+
+  it.each(decisive)(
+    "headers +$headerMs ms, body +$bodyMs ms, caller aborts +$abortMs ms, honours abort: $honorAbort",
+    async ({ headerMs, bodyMs, abortMs, honorAbort }) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const caller = new AbortController();
+      const { fetchImpl } = scripted({ headerMs, bodyMs, honorAbort });
+      const seen = observe(
+        fetchBytes("/x", { fetchImpl, timeoutMs: T, signal: caller.signal }),
+      );
+      after(abortMs, () => caller.abort(REASON));
+
+      await vi.advanceTimersByTimeAsync(T);
+      expect(seen.settled).toBe(true);
+      const first = Math.min(headerMs + bodyMs, abortMs, T);
+      if (first === headerMs + bodyMs) {
+        expect(seen.error).toBeUndefined();
+        expect(seen.value).toEqual(BODY);
+      } else if (first === abortMs) {
+        expect(seen.error).toBe(REASON);
       } else {
         expect(seen.error).toBeInstanceOf(FetchTimeoutError);
       }
